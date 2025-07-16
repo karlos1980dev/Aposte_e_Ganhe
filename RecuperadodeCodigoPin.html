@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Buscar Aposta</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #1f1f2e;
+      color: #fff;
+      padding: 20px;
+      text-align: center;
+    }
+    input {
+      padding: 10px;
+      width: 80%;
+      border-radius: 8px;
+      border: none;
+      margin-bottom: 15px;
+      text-align: center;
+      font-size: 1.1rem;
+    }
+    button {
+      padding: 12px 20px;
+      background: #25d366;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      margin: 5px;
+      transition: background 0.3s ease;
+    }
+    button:hover { background: #1fa455; }
+
+    .extra-buttons {
+      margin-top: 15px;
+      display: none;
+    }
+
+    pre {
+      background: #2c2a3a;
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 20px;
+      text-align: left;
+      white-space: pre-wrap;
+      font-family: monospace;
+      font-size: 1rem;
+      line-height: 1.4;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .modal div {
+      background: #333;
+      padding: 20px;
+      border-radius: 10px;
+      color: white;
+      max-width: 90%;
+      word-wrap: break-word;
+    }
+  </style>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <!-- html2pdf.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDlWGPUuGyugzvvQt_Wd5GI3IBFH90hUgQ",
+      authDomain: "multijogo.firebaseapp.com",
+      databaseURL: "https://multijogo-default-rtdb.firebaseio.com",
+      projectId: "multijogo",
+      storageBucket: "multijogo.appspot.com",
+      messagingSenderId: "328198585423",
+      appId: "1:328198585423:web:ae370bf8e7716ec2f17e3a"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let codigoAtual = "";
+
+    function abrirModal(msg) {
+      const modal = document.getElementById("modalMensagem");
+      const mensagem = document.getElementById("mensagemModal");
+      mensagem.textContent = msg;
+      modal.style.display = "flex";
+      setTimeout(() => modal.style.display = "none", 2500);
+    }
+
+    function buscarAposta() {
+  const codigo = document.getElementById("codigoInput").value.trim();
+  const resultado = document.getElementById("resultado");
+  const botoes = document.getElementById("botoesCompartilhar");
+
+  if (!codigo) {
+    abrirModal("Digite o código da aposta.");
+    return;
+  }
+
+  db.ref(`apostas/${codigo}`).once("value").then(snapshot => {
+    const dados = snapshot.val();
+
+    if (!dados) {
+      resultado.textContent = `❌ Aposta não encontrada para o código: ${codigo}`;
+      botoes.style.display = "none";
+      codigoAtual = "";
+      return;
+    }
+
+    codigoAtual = codigo;
+    botoes.style.display = "block";
+
+    let texto = `📄 Código: ${codigo}\n`;
+    if (dados.horario) texto += `🕒 Horário: ${dados.horario}\n`;
+    if (dados.valorUnico != null) texto += `💵 Valor: R$ ${Number(dados.valorUnico).toFixed(2)}\n`;
+    if (dados.totalPagar != null) texto += `💰 Total a Pagar: R$ ${Number(dados.totalPagar).toFixed(2)}\n`;
+
+    texto += `\n🔢 Detalhes da Aposta:\n`;
+
+    if (Array.isArray(dados.apostas) && dados.apostas.length > 0) {
+      dados.apostas.forEach(ap => {
+        texto += `• ${ap.tipo.toUpperCase()} ${ap.numero} (1º ao ${ap.posicao}º) - R$ ${Number(ap.valor).toFixed(2)}\n`;
+      });
+    }
+
+    if (Array.isArray(dados.duques) && dados.duques.length > 0) {
+      texto += `\n🎲 Duque 300\n`;
+      dados.duques.forEach(d => {
+        texto += `• ${d} R$ ${Number(dados.valorUnico).toFixed(2)} 1ao5\n`;
+      });
+    }
+
+    resultado.textContent = texto;
+  }).catch(error => {
+    abrirModal("Erro ao buscar a aposta. Tente novamente.");
+    console.error(error);
+  });
+}
+    function baixarPDF() {
+      if (!codigoAtual) {
+        abrirModal("Nenhuma aposta carregada para baixar.");
+        return;
+      }
+      const element = document.getElementById("resultado");
+      html2pdf().set({
+        margin: 0.5,
+        filename: `Aposta_${codigoAtual}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      }).from(element).save();
+    }
+
+    window.onload = () => {
+      const params = new URLSearchParams(window.location.search);
+      const cod = params.get("codigo");
+      if (cod) {
+        document.getElementById("codigoInput").value = cod;
+        buscarAposta();
+      }
+    }
+    function compartilharLink() {
+  if (!codigoAtual) {
+    abrirModal("Nenhuma aposta carregada para copiar link.");
+    return;
+  }
+  const link = `https://karlos1980dev.github.io/MJBICHO/aposta_viewerK.html?codigo=${codigoAtual}`;
+  navigator.clipboard.writeText(link).then(() => {
+    abrirModal("🔗 Link copiado para área de transferência!");
+  }).catch(() => {
+    abrirModal("Erro ao copiar link.");
+  });
+}
+  </script>
+</head>
+
+<body>
+  <h2>🔍 Buscar Aposta</h2>
+  <input id="codigoInput" type="text" placeholder="Digite o código (ex: MJ-1752...)" autocomplete="off" />
+  <br />
+  <button onclick="buscarAposta()">Buscar</button>
+
+  <div id="botoesCompartilhar" class="extra-buttons" style="display:none;">
+    <button onclick="compartilharWhatsApp()">📤 WhatsApp</button>
+    <button onclick="compartilharLink()">🔗 Copiar Link</button>
+    <button onclick="baixarPDF()">📥 Baixar PDF</button>
+  </div>
+
+  <pre id="resultado">🕵️ Digite o código acima para ver os detalhes.</pre>
+
+  <div id="modalMensagem" class="modal" role="alert" aria-live="assertive" aria-atomic="true">
+    <div>
+      <p id="mensagemModal"></p>
+    </div>
+  </div>
+</body>
+</html> 
