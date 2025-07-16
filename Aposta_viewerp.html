@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visualizar Aposta</title>
+  <style>
+    body {
+      background: #1f1c2c;
+      color: #f0f0f0;
+      font-family: Arial, sans-serif;
+      padding: 10px;
+      text-align: center;
+    }
+    .container {
+      width:100%;
+      margin: auto;
+      background-color: #2c2a3a;
+      padding: 10px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    }
+    .resultado {
+      margin-top: 25px;
+      text-align: center;
+      background-color: #1e1c2c;
+      padding: 10px;
+      border-radius: 10px;
+    }
+    h3 {
+      color: #25d366;
+    }
+    ul {
+      padding-left: 10px;
+    }
+    li {
+      margin-bottom: 5px;
+    }
+  </style>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+  apiKey: "AIzaSyDlWGPUuGyugzvvQt_Wd5GI3IBFH90hUgQ",
+  authDomain: "multijogo.firebaseapp.com",
+  databaseURL: "https://multijogo-default-rtdb.firebaseio.com",
+  projectId: "multijogo",
+  storageBucket: "multijogo.appspot.com",
+  messagingSenderId: "328198585423",
+  appId: "1:328198585423:web:ae370bf8e7716ec2f17e3a"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+window.onload = () => {
+  const params = new URLSearchParams(window.location.search);
+  const codigo = params.get("codigo");
+  if (codigo) {
+    buscarApostaPorCodigo(codigo.trim());
+  } else {
+    document.getElementById("resultado").innerHTML =
+      "<p style='color:red'>❗ Código da aposta não informado na URL.</p>";
+  }
+};
+
+function buscarApostaPorCodigo(codigo) {
+  const resultadoDiv = document.getElementById("resultado");
+  resultadoDiv.innerHTML = "🔍 Buscando aposta...";
+
+  db.ref(`apostas/${codigo}`).once("value").then((snapshot) => {
+    const dados = snapshot.val();
+    if (!dados) {
+      resultadoDiv.innerHTML = `❌ Aposta não encontrada para o código: ${codigo}`;
+      return;
+    }
+
+    let html = `<h3>🎯 Aposta ${codigo}</h3>`;
+    if (dados.horario)
+      html += `<p><strong>🕒 Horário:</strong> ${dados.horario}</p>`;
+    if (dados.totalPagar != null)
+      html += `<p><strong>💰 Total a Pagar:</strong> R$ ${Number(
+        dados.totalPagar
+      ).toFixed(2)}</p>`;
+    if (dados.totalReceber != null)
+      html += `<p><strong>🏆 Possível Retorno:</strong> R$ ${Number(
+        dados.totalReceber
+      ).toFixed(2)}</p>`;
+
+    // 🔍 Separar por tipo
+    const tiposSeparados = {
+      milhar: [],
+      centena: [],
+      dezena: [],
+      grupo: []
+    };
+
+    if (Array.isArray(dados.apostas)) {
+      dados.apostas.forEach(item => {
+        const tipo = item.tipo?.toLowerCase();
+        if (tiposSeparados[tipo]) {
+          tiposSeparados[tipo].push(item);
+        }
+      });
+    }
+
+    function renderTipo(titulo, arr) {
+      if (!arr || arr.length === 0) return "";
+      let tipoHtml = `<h4>${titulo}</h4><ul>`;
+      arr.forEach((item) => {
+        const numero = item.numero ?? item.numeros ?? "N/A";
+        const valor = item.valor != null ? `R$ ${Number(item.valor).toFixed(2)}` : "";
+        const posicao = item.posicao ? `(1º ao ${item.posicao}º)` : "";
+        const receber = item.receber != null ? `→ Receber R$ ${Number(item.receber).toFixed(2)}` : "";
+        tipoHtml += `<li>${numero} ${valor} ${posicao} ${receber}</li>`;
+      });
+      tipoHtml += `</ul>`;
+      return tipoHtml;
+    }
+
+    html += renderTipo("🐎 Milhar", tiposSeparados.milhar);
+    html += renderTipo("🎯 Centena", tiposSeparados.centena);
+    html += renderTipo("🔢 Dezena", tiposSeparados.dezena);
+    html += renderTipo("🐘 Grupo", tiposSeparados.grupo);
+
+    if (Array.isArray(dados.duques) && dados.duques.length > 0) {
+      html += `<h4>💥 Duque de Dezenas</h4><ul>`;
+      dados.duques.forEach(d => {
+        html += `<li>${d}</li>`;
+      });
+      html += `</ul>`;
+    }
+
+    resultadoDiv.innerHTML = html;
+  }).catch((err) => {
+    resultadoDiv.innerHTML = `<p style="color:red">⚠️ Erro ao buscar aposta: ${err.message}</p>`;
+  });
+}
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h2>📄 Detalhes da Aposta</h2>
+    <div id="resultado" class="resultado"></div>
+  </div>
+</body>
+</html>
